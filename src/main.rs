@@ -2,6 +2,7 @@ use rustyline::error::ReadlineError;
 use rustyline::{Editor, Result};
 
 fn main() -> Result<()> {
+    // `()` can be used when no completer is required
     let mut rl = Editor::<()>::new()?;
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
