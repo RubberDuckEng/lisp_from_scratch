@@ -1,11 +1,13 @@
 use rustyline::error::ReadlineError;
 use rustyline::{Editor, Result};
 
+#[derive(Debug, PartialEq, Eq)]
 enum Value {
     Cell(Box<Cell>),
     Symbol(String),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 struct Cell {
     left: Option<Value>,  // The value associated with this cell.
     right: Option<Value>, // The pointer to the next cell.
@@ -32,31 +34,34 @@ impl Cell {
 
 fn parse(input: &str) -> Result<Option<Value>> {
     let mut tokens = input.split_whitespace();
-    let mut values = Vec::new();
+    let mut stack = Vec::new();
     while let Some(token) = tokens.next() {
         match token {
             "(" => {
-                let mut sub_values = Vec::new();
-                while let Some(token) = tokens.next() {
-                    if token == ")" {
-                        break;
-                    } else {
-                        // TODO: Convert to use a stack rather than using the
-                        // runtime stack.
-                        sub_values.push(parse(token)?);
+                stack.push(Vec::new());
+                break;
+            }
+            ")" => match stack.pop() {
+                Some(values) => {
+                    let value = Cell::from_vec(values);
+                    match stack.last_mut() {
+                        Some(top) => top.push(value),
+                        None => return Ok(value),
                     }
+                    break;
                 }
-                values.push(Cell::from_vec(sub_values));
-            }
-            ")" => {
-                return Err(ReadlineError::Eof);
-            }
+                None => return Err(ReadlineError::Eof),
+            },
             _ => {
-                values.push(Some(Value::Symbol(token.to_string())));
+                let value = Some(Value::Symbol(token.to_string()));
+                match stack.last_mut() {
+                    Some(top) => top.push(value),
+                    None => return Ok(value),
+                }
             }
         }
     }
-    Ok(Cell::from_vec(values))
+    return Ok(None);
 }
 
 fn print_list(buffer: &mut String, cell: &Option<Value>) {
@@ -135,10 +140,24 @@ mod test {
     use super::*;
 
     #[test]
-    fn base_test() {
-        let value = parse("(a b c)").unwrap();
+    fn parse_test() {
+        let value = parse("a").unwrap();
+        let a_symbol = Some(Value::Symbol("a".to_string()));
+        assert_eq!(&value, &a_symbol);
+
+        let value = parse("( a )").unwrap();
+        assert_eq!(&value, &Some(Cell::new(a_symbol, None)));
+    }
+
+    // TODO: Test '(a)' or '()' without spaces.
+
+    #[test]
+    fn parse_and_print_test() {
+        let value = parse("( a b c )").unwrap();
+        // print!(value.left.unwrap());
+        // print!(value.right.unwrap());
         let mut string = String::new();
         print_value(&mut string, &value);
-        assert_eq!(string, "(a b c)");
+        assert_eq!(string, "( a b c )");
     }
 }
