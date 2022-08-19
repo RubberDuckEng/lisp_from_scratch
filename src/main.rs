@@ -178,8 +178,6 @@ mod test {
     #[test]
     fn parse_and_print_test() {
         let value = parse("( a b c )").unwrap();
-        // print!(value.left.unwrap());
-        // print!(value.right.unwrap());
         let mut string = String::new();
         print_value(&mut string, &value);
         assert_eq!(string, "(a b c)");
