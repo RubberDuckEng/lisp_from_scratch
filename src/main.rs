@@ -7,6 +7,13 @@ enum Value {
     Symbol(String),
 }
 
+impl Value {
+    #[cfg(test)]
+    fn from_str(value: &str) -> Option<Value> {
+        Some(Value::Symbol(value.to_string()))
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct Cell {
     left: Option<Value>,  // The value associated with this cell.
@@ -25,7 +32,7 @@ impl Cell {
 
     fn from_vec(values: Vec<Option<Value>>) -> Option<Value> {
         let mut cell: Option<Value> = Self::empty_list();
-        for value in values {
+        for value in values.into_iter().rev() {
             cell = Some(Cell::new(value, cell));
         }
         cell
@@ -35,33 +42,40 @@ impl Cell {
 fn parse(input: &str) -> Result<Option<Value>> {
     let mut tokens = input.split_whitespace();
     let mut stack = Vec::new();
+    stack.push(Vec::new());
+
+    fn save_value(stack: &mut Vec<Vec<Option<Value>>>, value: Option<Value>) -> Result<()> {
+        match stack.last_mut() {
+            Some(top) => top.push(value),
+            None => return Err(ReadlineError::Eof),
+        }
+        Ok(())
+    }
+
+    fn only<T>(vec: Vec<T>) -> Result<T> {
+        match vec.len() {
+            1 => Ok(vec.into_iter().next().unwrap()),
+            _ => Err(ReadlineError::Eof),
+        }
+    }
+
     while let Some(token) = tokens.next() {
         match token {
             "(" => {
                 stack.push(Vec::new());
-                break;
             }
             ")" => match stack.pop() {
                 Some(values) => {
-                    let value = Cell::from_vec(values);
-                    match stack.last_mut() {
-                        Some(top) => top.push(value),
-                        None => return Ok(value),
-                    }
-                    break;
+                    save_value(&mut stack, Cell::from_vec(values))?;
                 }
                 None => return Err(ReadlineError::Eof),
             },
             _ => {
-                let value = Some(Value::Symbol(token.to_string()));
-                match stack.last_mut() {
-                    Some(top) => top.push(value),
-                    None => return Ok(value),
-                }
+                save_value(&mut stack, Some(Value::Symbol(token.to_string())))?;
             }
         }
     }
-    return Ok(None);
+    return only(only(stack)?);
 }
 
 fn print_list(buffer: &mut String, cell: &Option<Value>) {
@@ -142,14 +156,24 @@ mod test {
     #[test]
     fn parse_test() {
         let value = parse("a").unwrap();
-        let a_symbol = Some(Value::Symbol("a".to_string()));
+        let a_symbol = Value::from_str("a");
         assert_eq!(&value, &a_symbol);
 
         let value = parse("( a )").unwrap();
         assert_eq!(&value, &Some(Cell::new(a_symbol, None)));
+
+        let a_symbol = Value::from_str("a");
+        let b_symbol = Value::from_str("b");
+        let value = parse("( a b )").unwrap();
+        assert_eq!(
+            &value,
+            &Some(Cell::new(a_symbol, Some(Cell::new(b_symbol, None))))
+        );
     }
 
     // TODO: Test '(a)' or '()' without spaces.
+
+    // Test 'a b' should be an error.
 
     #[test]
     fn parse_and_print_test() {
@@ -158,6 +182,6 @@ mod test {
         // print!(value.right.unwrap());
         let mut string = String::new();
         print_value(&mut string, &value);
-        assert_eq!(string, "( a b c )");
+        assert_eq!(string, "(a b c)");
     }
 }
