@@ -35,3 +35,39 @@ impl Cell {
         cell
     }
 }
+
+fn print_list(buffer: &mut String, cell: &Option<Value>) {
+    buffer.push_str("(");
+    let mut first = true;
+    let mut maybe_current = cell;
+    while let Some(Value::Cell(cell)) = maybe_current {
+        if first {
+            first = false;
+        } else {
+            buffer.push_str(" ");
+        }
+        print_value(buffer, &cell.left);
+        maybe_current = &cell.right;
+    }
+    buffer.push_str(")");
+}
+
+fn print_value(buffer: &mut String, value: &Option<Value>) {
+    match value {
+        Some(Value::Cell(_)) => {
+            print_list(buffer, value);
+        }
+        Some(Value::Symbol(symbol)) => {
+            buffer.push_str(symbol);
+        }
+        None => {
+            buffer.push_str("nil");
+        }
+    }
+}
+
+pub fn to_string(value: &Option<Value>) -> String {
+    let mut buffer = String::new();
+    print_value(&mut buffer, value);
+    buffer
+}

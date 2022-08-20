@@ -9,36 +9,6 @@ pub enum Error {
     ParseError,
 }
 
-fn print_list(buffer: &mut String, cell: &Option<Value>) {
-    buffer.push_str("(");
-    let mut first = true;
-    let mut maybe_current = cell;
-    while let Some(Value::Cell(cell)) = maybe_current {
-        if first {
-            first = false;
-        } else {
-            buffer.push_str(" ");
-        }
-        print_value(buffer, &cell.left);
-        maybe_current = &cell.right;
-    }
-    buffer.push_str(")");
-}
-
-pub fn print_value(buffer: &mut String, value: &Option<Value>) {
-    match value {
-        Some(Value::Cell(_)) => {
-            print_list(buffer, value);
-        }
-        Some(Value::Symbol(symbol)) => {
-            buffer.push_str(symbol);
-        }
-        None => {
-            buffer.push_str("nil");
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -61,15 +31,30 @@ mod test {
         );
     }
 
-    // TODO: Test '(a)' or '()' without spaces.
+    #[test]
+    fn parse_empty_test() {
+        let value = parse("()").unwrap();
+        assert_eq!(&value, &None);
+    }
 
-    // Test 'a b' should be an error.
+    #[test]
+    fn parse_error_test() {
+        let result = parse("a b");
+        assert!(result.is_err());
+    }
 
     #[test]
     fn parse_and_print_test() {
+        let value = parse("(a)").unwrap();
+        assert_eq!(to_string(&value), "(a)");
+
         let value = parse("( a b c )").unwrap();
-        let mut string = String::new();
-        print_value(&mut string, &value);
-        assert_eq!(string, "(a b c)");
+        assert_eq!(to_string(&value), "(a b c)");
+
+        let value = parse("(a b c)").unwrap();
+        assert_eq!(to_string(&value), "(a b c)");
+
+        let value = parse("(a(b c))").unwrap();
+        assert_eq!(to_string(&value), "(a (b c))");
     }
 }

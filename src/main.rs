@@ -18,9 +18,7 @@ fn main() -> Result<()> {
                 rl.add_history_entry(line.as_str());
                 match vm::parse(&line) {
                     Ok(value) => {
-                        let mut buffer = String::new();
-                        vm::print_value(&mut buffer, &value);
-                        println!("{}", buffer);
+                        println!("{}", vm::to_string(&value));
                     }
                     Err(err) => {
                         println!("Error: {:?}", err);
