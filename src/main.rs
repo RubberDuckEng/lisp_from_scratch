@@ -16,7 +16,7 @@ fn main() -> Result<()> {
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
-                match vm::parse(&line) {
+                match vm::parse(&line).and_then(|value| vm::eval(value)) {
                     Ok(value) => {
                         println!("{}", vm::to_string(&value));
                     }

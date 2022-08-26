@@ -1,12 +1,16 @@
+mod eval;
 mod parser;
 mod values;
 
+pub use eval::*;
 pub use parser::*;
 pub use values::*;
 
 #[derive(Debug)]
 pub enum Error {
     ParseError,
+    EvalError(String),
+    TypeError,
 }
 
 #[cfg(test)]
