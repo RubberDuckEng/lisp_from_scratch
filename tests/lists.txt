@@ -1,0 +1,50 @@
+#input
+(cons 'a 'b)
+#output
+(a . b)
+==========
+#input
+(car (cons 'a 'b))
+#output
+a
+==========
+#input
+(cdr (cons 'a 'b))
+#output
+b
+==========
+#input
+(car '(a b c))
+#output
+a
+==========
+#input
+(cdr '(a b c))
+#output
+(b c)
+==========
+#input
+(cdr '(a b))
+#output
+(b)
+==========
+#input
+(cdr '(a))
+#output
+nil
+==========
+#input
+(car 'a)
+#output
+#error: TypeError
+==========
+#input
+(cdr 'a)
+#output
+#error: TypeError
+==========
+#input
+(car 'a 'b)
+#output
+#error: ArityError
+==========

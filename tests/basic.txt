@@ -1,0 +1,40 @@
+#input
+'a
+#output
+a
+==========
+#input
+'(a b)
+#output
+(a b)
+==========
+#input
+'(a b)
+#output
+(a b)
+==========
+#input
+'()
+#output
+nil
+==========
+#input
+'(a(b c))
+#output
+(a (b c))
+==========
+#input
+(a b)
+#output
+#error: NotFoundError("a")
+==========
+#input
+('a b)
+#output
+#error: NotFoundError("b")
+==========
+#input
+('a 'b)
+#output
+#error: EvalError("Not a function: a")
+==========

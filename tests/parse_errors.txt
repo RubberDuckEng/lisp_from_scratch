@@ -1,0 +1,30 @@
+#input
+'
+#output
+#error: ParseError
+==========
+#input
+(
+#output
+#error: ParseError
+==========
+#input
+)
+#output
+#error: ParseError
+==========
+#input
+())
+#output
+#error: ParseError
+==========
+#input
+(()
+#output
+#error: ParseError
+==========
+#input
+a b
+#output
+#error: ParseError
+==========
