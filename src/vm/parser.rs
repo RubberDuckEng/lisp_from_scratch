@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::vm::values::*;
 use crate::vm::Error;
 
@@ -96,7 +98,7 @@ impl<'a> Tokenizer<'a> {
     }
 }
 
-fn parse_value(tokenizer: &mut Tokenizer) -> Result<Option<Value>, Error> {
+fn parse_value(tokenizer: &mut Tokenizer) -> Result<Arc<Value>, Error> {
     if let Some(token) = tokenizer.next() {
         // Option<Vec<Value>> maybe_values;
         match token {
@@ -113,16 +115,16 @@ fn parse_value(tokenizer: &mut Tokenizer) -> Result<Option<Value>, Error> {
             Token::CloseParen => Err(Error::ParseError),
             Token::QuoteMark => {
                 let value = parse_value(tokenizer)?;
-                Ok(Some(Value::Quoted(Box::new(value))))
+                Ok(Arc::new(Value::Quoted(value)))
             }
-            Token::Symbol(symbol) => Ok(Some(Value::Symbol(symbol))),
+            Token::Symbol(name) => Ok(Arc::new(Value::Symbol(name))),
         }
     } else {
         Err(Error::ParseError)
     }
 }
 
-pub fn parse(input: &str) -> Result<Option<Value>, Error> {
+pub fn parse(input: &str) -> Result<Arc<Value>, Error> {
     let mut tokenizer = Tokenizer::new(input);
     let value = parse_value(&mut tokenizer)?;
     if tokenizer.next().is_some() {

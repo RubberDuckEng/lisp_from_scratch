@@ -11,6 +11,8 @@ pub enum Error {
     ParseError,
     EvalError(String),
     TypeError,
+    ArityError,
+    NotFoundError(String),
 }
 
 #[cfg(test)]
@@ -22,25 +24,25 @@ mod test {
     #[test]
     fn parse_test() {
         let value = parse("a").unwrap();
-        let a_symbol = Value::from_str("a");
+        let a_symbol = Value::from_name("a");
         assert_eq!(&value, &a_symbol);
 
         let value = parse("( a )").unwrap();
-        assert_eq!(&value, &Some(Cell::new(a_symbol, None)));
+        assert_eq!(&value, &Cell::new(a_symbol, Value::nil()));
 
-        let a_symbol = Value::from_str("a");
-        let b_symbol = Value::from_str("b");
+        let a_symbol = Value::from_name("a");
+        let b_symbol = Value::from_name("b");
         let value = parse("( a b )").unwrap();
         assert_eq!(
             &value,
-            &Some(Cell::new(a_symbol, Some(Cell::new(b_symbol, None))))
+            &Cell::new(a_symbol, Cell::new(b_symbol, Value::nil()))
         );
     }
 
     #[test]
     fn parse_empty_test() {
         let value = parse("()").unwrap();
-        assert_eq!(&value, &None);
+        assert_eq!(&value, &Value::nil());
     }
 
     #[test]

@@ -4,19 +4,17 @@ use rustyline::{Editor, Result};
 mod vm;
 
 fn main() -> Result<()> {
-    // MVP: parse our prefix calculator
-    // (+ 1 (+ 2 3))
-
     let mut rl = Editor::<()>::new()?;
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
     }
+    let scope = vm::Scope::builtin();
     loop {
         let readline = rl.readline(">> ");
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
-                match vm::parse(&line).and_then(|value| vm::eval(value)) {
+                match vm::parse(&line).and_then(|value| vm::eval(&scope, &value)) {
                     Ok(value) => {
                         println!("{}", vm::to_string(&value));
                     }

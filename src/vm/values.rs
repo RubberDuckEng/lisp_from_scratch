@@ -1,47 +1,122 @@
+use std::ops::Deref;
+use std::sync::Arc;
+
+use crate::vm::*;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Value {
-    Cell(Box<Cell>),
+    Nil,
+    Cell(Cell),
     Symbol(String),
-    Quoted(Box<Option<Value>>),
+    Quoted(Arc<Value>),
+    Function(Func),
 }
 
 impl Value {
     #[cfg(test)]
-    pub fn from_str(value: &str) -> Option<Value> {
-        Some(Value::Symbol(value.to_string()))
+    pub fn from_name(name: &str) -> Arc<Value> {
+        Arc::new(Value::Symbol(name.to_string()))
+    }
+
+    pub fn nil() -> Arc<Value> {
+        Arc::new(Value::Nil)
+    }
+
+    pub fn to_args(self: &Arc<Self>) -> Result<Vec<Arc<Value>>, Error> {
+        let mut args = Vec::new();
+        let mut current = self.clone();
+        loop {
+            match current.deref() {
+                Value::Nil => break,
+                Value::Cell(cell) => {
+                    args.push(cell.left.clone());
+                    current = cell.right.clone();
+                }
+                _ => return Err(Error::TypeError),
+            }
+        }
+        return Ok(args);
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Cell {
-    pub left: Option<Value>,  // The value associated with this cell.
-    pub right: Option<Value>, // The pointer to the next cell.
+    pub left: Arc<Value>,
+    pub right: Arc<Value>,
 }
 
 impl Cell {
-    pub fn new(left: Option<Value>, right: Option<Value>) -> Value {
-        Value::Cell(Box::new(Cell { left, right }))
+    pub fn new(left: Arc<Value>, right: Arc<Value>) -> Arc<Value> {
+        Arc::new(Value::Cell(Cell { left, right }))
     }
 
     // '(), the empty list, is the same as nil, which is the same as None.
-    pub fn empty_list() -> Option<Value> {
-        None
+    pub fn empty_list() -> Arc<Value> {
+        Value::nil()
     }
 
-    pub fn from_vec(values: Vec<Option<Value>>) -> Option<Value> {
-        let mut cell: Option<Value> = Self::empty_list();
+    pub fn from_vec(values: Vec<Arc<Value>>) -> Arc<Value> {
+        let mut cell = Self::empty_list();
         for value in values.into_iter().rev() {
-            cell = Some(Cell::new(value, cell));
+            cell = Cell::new(value, cell);
         }
         cell
     }
 }
 
-fn print_list(buffer: &mut String, cell: &Option<Value>) {
+pub enum FuncBody {
+    Native(fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>),
+}
+
+impl std::fmt::Debug for FuncBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.debug_struct("FuncBody").field("fn", &"#code").finish()
+    }
+}
+
+impl std::cmp::PartialEq for FuncBody {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
+
+impl std::cmp::Eq for FuncBody {}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Func {
+    pub name: String,
+    pub arity: usize,
+    pub body: FuncBody,
+}
+
+impl Func {
+    pub fn new(name: String, arity: usize, body: FuncBody) -> Arc<Value> {
+        Arc::new(Value::Function(Self { name, arity, body }))
+    }
+
+    pub fn from_native(
+        name: &'static str,
+        arity: usize,
+        native: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
+    ) -> Arc<Value> {
+        Self::new(name.to_string(), arity, FuncBody::Native(native))
+    }
+
+    pub fn call(&self, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
+        if args.len() != self.arity {
+            return Err(Error::ArityError);
+        }
+        match &self.body {
+            FuncBody::Native(function) => function(args),
+        }
+    }
+}
+
+fn print_list(buffer: &mut String, cell: &Arc<Value>) {
     buffer.push_str("(");
     let mut first = true;
     let mut maybe_current = cell;
-    while let Some(Value::Cell(cell)) = maybe_current {
+    while let Value::Cell(cell) = maybe_current.deref() {
         if first {
             first = false;
         } else {
@@ -50,28 +125,38 @@ fn print_list(buffer: &mut String, cell: &Option<Value>) {
         print_value(buffer, &cell.left);
         maybe_current = &cell.right;
     }
+    match maybe_current.deref() {
+        Value::Nil => {}
+        _ => {
+            buffer.push_str(" . ");
+            print_value(buffer, maybe_current);
+        }
+    }
     buffer.push_str(")");
 }
 
-fn print_value(buffer: &mut String, value: &Option<Value>) {
-    match value {
-        Some(Value::Cell(_)) => {
+fn print_value(buffer: &mut String, value: &Arc<Value>) {
+    match value.deref() {
+        Value::Cell(_) => {
             print_list(buffer, value);
         }
-        Some(Value::Symbol(symbol)) => {
-            buffer.push_str(symbol);
+        Value::Symbol(name) => {
+            buffer.push_str(name);
         }
-        Some(Value::Quoted(value)) => {
-            buffer.push_str("'");
+        Value::Quoted(value) => {
+            buffer.push('\'');
             print_value(buffer, value);
         }
-        None => {
+        Value::Function(_) => {
+            buffer.push_str("#func");
+        }
+        Value::Nil => {
             buffer.push_str("nil");
         }
     }
 }
 
-pub fn to_string(value: &Option<Value>) -> String {
+pub fn to_string(value: &Arc<Value>) -> String {
     let mut buffer = String::new();
     print_value(&mut buffer, value);
     buffer
