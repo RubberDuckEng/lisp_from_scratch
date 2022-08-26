@@ -15,6 +15,7 @@ struct Tokenizer<'a> {
     input: &'a str,
     position: usize,
     buffer: String,
+    peeked: Option<Token>,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -23,6 +24,7 @@ impl<'a> Tokenizer<'a> {
             input,
             position: 0,
             buffer: String::new(),
+            peeked: None,
         }
     }
 
@@ -32,30 +34,17 @@ impl<'a> Tokenizer<'a> {
         return string;
     }
 
-    fn skip_whitespace(&mut self) {
-        while self.position < self.input.len()
-            && self
-                .input
-                .chars()
-                .nth(self.position)
-                .unwrap()
-                .is_whitespace()
-        {
-            self.position += 1;
+    fn peek(&mut self) -> &Option<Token> {
+        if self.peeked.is_none() {
+            self.peeked = self.next();
         }
-    }
-
-    // TODO: It's gross that this modifies the parser state.
-    // We need to think more about how to terminate the list parsing.
-    fn next_is_close_paren(&mut self) -> bool {
-        self.skip_whitespace();
-        if self.position >= self.input.len() {
-            return false;
-        }
-        return self.input.chars().nth(self.position) == Some(')');
+        return &self.peeked;
     }
 
     fn next(&mut self) -> Option<Token> {
+        if let Some(token) = self.peeked.take() {
+            return Some(token);
+        }
         while let Some(ch) = self.input.chars().nth(self.position) {
             self.position += 1;
             match ch {
@@ -100,11 +89,10 @@ impl<'a> Tokenizer<'a> {
 
 fn parse_value(tokenizer: &mut Tokenizer) -> Result<Arc<Value>, Error> {
     if let Some(token) = tokenizer.next() {
-        // Option<Vec<Value>> maybe_values;
         match token {
             Token::OpenParen => {
                 let mut values = Vec::new();
-                while !tokenizer.next_is_close_paren() {
+                while *tokenizer.peek() != Some(Token::CloseParen) {
                     let value = parse_value(tokenizer)?;
                     values.push(value);
                 }

@@ -64,5 +64,8 @@ mod test {
 
         let value = parse("(a(b c))").unwrap();
         assert_eq!(to_string(&value), "(a (b c))");
+
+        let value = parse("(a '(b c))").unwrap();
+        assert_eq!(to_string(&value), "(a '(b c))");
     }
 }
