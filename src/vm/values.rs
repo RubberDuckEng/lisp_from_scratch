@@ -2,6 +2,7 @@
 pub enum Value {
     Cell(Box<Cell>),
     Symbol(String),
+    Quoted(Box<Option<Value>>),
 }
 
 impl Value {
@@ -59,6 +60,10 @@ fn print_value(buffer: &mut String, value: &Option<Value>) {
         }
         Some(Value::Symbol(symbol)) => {
             buffer.push_str(symbol);
+        }
+        Some(Value::Quoted(value)) => {
+            buffer.push_str("'");
+            print_value(buffer, value);
         }
         None => {
             buffer.push_str("nil");

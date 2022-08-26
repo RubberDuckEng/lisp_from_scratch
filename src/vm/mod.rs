@@ -13,6 +13,8 @@ pub enum Error {
 mod test {
     use super::*;
 
+    // FIXME: Test which are valid symbol characters.
+
     #[test]
     fn parse_test() {
         let value = parse("a").unwrap();
