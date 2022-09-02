@@ -1,0 +1,5 @@
+#input
+((lambda (x) (cons 'a x)) '(b))
+#output
+(a b)
+==========

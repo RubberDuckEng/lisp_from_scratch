@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -65,8 +66,41 @@ impl Cell {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct Lambda {
+    scope: Arc<Scope>,
+    formals: Vec<String>,
+    body: Arc<Value>,
+}
+
+impl Lambda {
+    pub fn new(scope: Arc<Scope>, formals: Vec<String>, body: Arc<Value>) -> Arc<Value> {
+        Arc::new(Value::Function(Func {
+            name: "#lambda".to_string(),
+            arity: formals.len(),
+            body: FuncBody::Lambda(Lambda {
+                scope,
+                formals,
+                body,
+            }),
+        }))
+    }
+
+    pub fn call(&self, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
+        let bindings = HashMap::from_iter(
+            self.formals
+                .iter()
+                .zip(args)
+                .map(|(name, value)| (name.clone(), value.clone())),
+        );
+        let scope = self.scope.new_child(bindings);
+        eval(&scope, &self.body)
+    }
+}
+
 pub enum FuncBody {
     Native(fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>),
+    Lambda(Lambda),
 }
 
 impl std::fmt::Debug for FuncBody {
@@ -109,14 +143,17 @@ impl Func {
         }
         match &self.body {
             FuncBody::Native(function) => function(args),
+            FuncBody::Lambda(lambda) => lambda.call(args),
         }
     }
 }
 
+pub type NativeSpecialForm = fn(&Arc<Scope>, &[Arc<Value>]) -> Result<Arc<Value>, Error>;
+
 pub struct SpecialForm {
     pub name: String,
     pub arity: usize,
-    pub body: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
+    pub body: NativeSpecialForm,
 }
 
 impl std::fmt::Debug for SpecialForm {
@@ -134,27 +171,19 @@ impl std::cmp::PartialEq for SpecialForm {
 impl std::cmp::Eq for SpecialForm {}
 
 impl SpecialForm {
-    pub fn new(
-        name: String,
-        arity: usize,
-        body: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
-    ) -> Arc<Value> {
+    pub fn new(name: String, arity: usize, body: NativeSpecialForm) -> Arc<Value> {
         Arc::new(Value::SpecialForm(SpecialForm { name, arity, body }))
     }
 
-    pub fn from_native(
-        name: &'static str,
-        arity: usize,
-        native: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
-    ) -> Arc<Value> {
+    pub fn from_native(name: &'static str, arity: usize, native: NativeSpecialForm) -> Arc<Value> {
         Self::new(name.to_string(), arity, native)
     }
 
-    pub fn call(&self, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
+    pub fn call(&self, scope: &Arc<Scope>, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
         if args.len() != self.arity {
             return Err(Error::ArityError);
         }
-        (self.body)(args)
+        (self.body)(scope, args)
     }
 }
 
