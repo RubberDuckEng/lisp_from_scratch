@@ -24,6 +24,13 @@ impl Value {
         Arc::new(Value::Nil)
     }
 
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            Value::Nil => false,
+            _ => true,
+        }
+    }
+
     pub fn to_args(self: &Arc<Self>) -> Result<Vec<Arc<Value>>, Error> {
         let mut args = Vec::new();
         let mut current = self.clone();

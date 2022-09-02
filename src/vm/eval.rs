@@ -42,6 +42,17 @@ fn lambda(scope: &Arc<Scope>, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> 
     Ok(Lambda::new(scope.clone(), formals, body))
 }
 
+fn if_fn(scope: &Arc<Scope>, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
+    let condition = eval(scope, &args[0])?;
+    if condition.is_truthy() {
+        let then_clause = &args[1];
+        eval(scope, then_clause)
+    } else {
+        let else_clause = &args[2];
+        eval(scope, else_clause)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Scope {
     bindings: HashMap<String, Arc<Value>>,
@@ -59,6 +70,8 @@ impl Scope {
         scope.bind_native_function("cdr", 1, cdr);
         scope.bind_special_form("quote", 1, quote);
         scope.bind_special_form("lambda", 2, lambda);
+        scope.bind_special_form("if", 3, if_fn);
+
         Arc::new(scope)
     }
 
