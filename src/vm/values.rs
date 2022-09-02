@@ -10,6 +10,7 @@ pub enum Value {
     Symbol(String),
     Quoted(Arc<Value>),
     Function(Func),
+    SpecialForm(SpecialForm),
 }
 
 impl Value {
@@ -112,6 +113,51 @@ impl Func {
     }
 }
 
+pub struct SpecialForm {
+    pub name: String,
+    pub arity: usize,
+    pub body: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
+}
+
+impl std::fmt::Debug for SpecialForm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.debug_struct("SpecialForm").field("fn", &"#code").finish()
+    }
+}
+
+impl std::cmp::PartialEq for SpecialForm {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
+
+impl std::cmp::Eq for SpecialForm {}
+
+impl SpecialForm {
+    pub fn new(
+        name: String,
+        arity: usize,
+        body: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
+    ) -> Arc<Value> {
+        Arc::new(Value::SpecialForm(SpecialForm { name, arity, body }))
+    }
+
+    pub fn from_native(
+        name: &'static str,
+        arity: usize,
+        native: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
+    ) -> Arc<Value> {
+        Self::new(name.to_string(), arity, native)
+    }
+
+    pub fn call(&self, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
+        if args.len() != self.arity {
+            return Err(Error::ArityError);
+        }
+        (self.body)(args)
+    }
+}
+
 fn print_list(buffer: &mut String, cell: &Arc<Value>) {
     buffer.push_str("(");
     let mut first = true;
@@ -149,6 +195,9 @@ fn print_value(buffer: &mut String, value: &Arc<Value>) {
         }
         Value::Function(_) => {
             buffer.push_str("#func");
+        }
+        Value::SpecialForm(_) => {
+            buffer.push_str("#special_form");
         }
         Value::Nil => {
             buffer.push_str("nil");

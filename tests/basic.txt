@@ -31,10 +31,15 @@ nil
 #input
 ('a b)
 #output
-#error: NotFoundError("b")
+#error: EvalError("Not a function: a")
 ==========
 #input
 ('a 'b)
 #output
 #error: EvalError("Not a function: a")
+==========
+#input
+(quote (a b))
+#output
+(a b)
 ==========

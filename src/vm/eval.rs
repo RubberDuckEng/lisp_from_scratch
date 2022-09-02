@@ -23,6 +23,10 @@ fn cdr(args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
     }
 }
 
+fn quote(args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
+    Ok(args[0].clone())
+}
+
 pub struct Scope {
     bindings: HashMap<String, Arc<Value>>,
 }
@@ -35,6 +39,7 @@ impl Scope {
         scope.bind_native_function("cons", 2, cons);
         scope.bind_native_function("car", 1, car);
         scope.bind_native_function("cdr", 1, cdr);
+        scope.bind_special_form("quote", 1, quote);
         scope
     }
 
@@ -45,6 +50,15 @@ impl Scope {
         native: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
     ) {
         self.bind(name, Func::from_native(name, arity, native));
+    }
+
+    pub fn bind_special_form(
+        &mut self,
+        name: &'static str,
+        arity: usize,
+        native: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
+    ) {
+        self.bind(name, SpecialForm::from_native(name, arity, native));
     }
 
     pub fn bind(&mut self, name: &str, value: Arc<Value>) {
@@ -62,21 +76,25 @@ impl Scope {
 
 pub fn eval(scope: &Scope, value: &Arc<Value>) -> Result<Arc<Value>, Error> {
     match value.deref() {
-        Value::Nil | Value::Function(_) => Ok(value.clone()),
+        Value::Nil | Value::Function(_) | Value::SpecialForm(_) => Ok(value.clone()),
         Value::Symbol(name) => scope.lookup(name),
         Value::Quoted(value) => Ok(value.clone()),
         Value::Cell(_) => {
             let args = value.to_args()?;
-            // TODO: Check for special forms.
-            let evaluated = args
-                .iter()
-                .map(|value| eval(scope, value))
-                .collect::<Result<Vec<Arc<Value>>, Error>>()?;
-            match evaluated[0].deref() {
-                Value::Function(function) => function.call(&evaluated[1..]),
+            let op = eval(scope, &args[0])?;
+            match op.deref() {
+                Value::Function(function) => {
+                    let evaluated: Vec<Arc<Value>> = args
+                        .iter()
+                        .skip(1)
+                        .map(|value| eval(scope, value))
+                        .collect::<Result<Vec<Arc<Value>>, Error>>()?;
+                    function.call(&evaluated)
+                }
+                Value::SpecialForm(special_form) => special_form.call(&args[1..]),
                 _ => Err(Error::EvalError(format!(
                     "Not a function: {}",
-                    to_string(&evaluated[0])
+                    to_string(&op)
                 ))),
             }
         }
