@@ -1,0 +1,5 @@
+#input
+((macro (x) (list 'cons ''a x)) '(b))
+#output
+(a b)
+==========

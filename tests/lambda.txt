@@ -3,3 +3,33 @@
 #output
 (a b)
 ==========
+#input
+((lambda (x ...rest) rest) 'a 'b 'c 'd)
+#output
+(b c d)
+==========
+#input
+((lambda (...rest) rest) 'a 'b 'c 'd)
+#output
+(a b c d)
+==========
+#input
+((lambda (x y z) z) 'a 'b)
+#output
+#error: ArityError
+==========
+#input
+((lambda (...some ...more) some) 'a 'b 'c 'd)
+#output
+(a b c d)
+==========
+#input
+((lambda (...some ...more) more) 'a 'b 'c 'd)
+#output
+nil
+==========
+#input
+((lambda (...some x) some) 'a 'b 'c 'd)
+#output
+#error: ArityError
+==========

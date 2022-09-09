@@ -23,6 +23,10 @@ fn cdr(args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
     }
 }
 
+fn list(args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
+    Ok(Cell::from_vec(args.to_vec()))
+}
+
 fn quote(_scope: &Arc<Scope>, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
     Ok(args[0].clone())
 }
@@ -40,6 +44,21 @@ fn lambda(scope: &Arc<Scope>, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> 
         .collect::<Result<Vec<_>, Error>>()?;
     let body = args[1].clone();
     Ok(Lambda::new(scope.clone(), formals, body))
+}
+
+fn macro_fn(scope: &Arc<Scope>, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
+    let formals: Vec<String> = args[0]
+        .to_args()?
+        .iter()
+        .map(|value| -> Result<String, Error> {
+            match value.as_ref() {
+                Value::Symbol(symbol) => Ok(symbol.clone()),
+                _ => Err(Error::TypeError),
+            }
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    let body = args[1].clone();
+    Ok(Macro::new(scope.clone(), formals, body))
 }
 
 fn if_fn(scope: &Arc<Scope>, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
@@ -65,23 +84,34 @@ impl Scope {
             bindings: HashMap::new(),
             parent: None,
         };
-        scope.bind_native_function("cons", 2, cons);
-        scope.bind_native_function("car", 1, car);
-        scope.bind_native_function("cdr", 1, cdr);
+
+        scope.bind_native("cons", 2, cons);
+        scope.bind_native("car", 1, car);
+        scope.bind_native("cdr", 1, cdr);
+        scope.bind_variadict_native("list", list);
         scope.bind_special_form("quote", 1, quote);
         scope.bind_special_form("lambda", 2, lambda);
         scope.bind_special_form("if", 3, if_fn);
+        scope.bind_special_form("macro", 2, macro_fn);
 
         Arc::new(scope)
     }
 
-    pub fn bind_native_function(
+    pub fn bind_native(
         &mut self,
         name: &'static str,
         arity: usize,
         native: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
     ) {
-        self.bind(name, Func::from_native(name, arity, native));
+        self.bind(name, Func::from_native_with_arity(name, native, arity));
+    }
+
+    pub fn bind_variadict_native(
+        &mut self,
+        name: &'static str,
+        native: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
+    ) {
+        self.bind(name, Func::from_native(name, native));
     }
 
     pub fn bind_special_form(

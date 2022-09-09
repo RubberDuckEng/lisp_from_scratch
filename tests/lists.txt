@@ -48,3 +48,8 @@ nil
 #output
 #error: ArityError
 ==========
+#input
+(list 'a 'b 'c)
+#output
+(a b c)
+==========

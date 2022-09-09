@@ -74,6 +74,45 @@ impl Cell {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct Macro {
+    scope: Arc<Scope>,
+    formals: Vec<String>,
+    body: Arc<Value>,
+}
+
+impl Macro {
+    pub fn new(scope: Arc<Scope>, formals: Vec<String>, body: Arc<Value>) -> Arc<Value> {
+        Arc::new(Value::SpecialForm(SpecialForm {
+            name: "#macro".to_string(),
+            arity: formals.len(),
+            body: SpecialFormBody::Macro(Macro {
+                scope,
+                formals,
+                body,
+            }),
+        }))
+    }
+
+    pub fn call(
+        &self,
+        dynamic_scope: &Arc<Scope>,
+        args: &[Arc<Value>],
+    ) -> Result<Arc<Value>, Error> {
+        let bindings = HashMap::from_iter(
+            self.formals
+                .iter()
+                .zip(args)
+                .map(|(name, value)| (name.clone(), value.clone())),
+        );
+        let lexical_scope = self.scope.new_child(bindings);
+        // We need to evaluate the body in the context of the macro's scope.
+        let code = eval(&lexical_scope, &self.body)?;
+        // We need to evaluate the code produced the macro in the context of where the macro is expanded.
+        eval(dynamic_scope, &code)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Lambda {
     scope: Arc<Scope>,
     formals: Vec<String>,
@@ -84,7 +123,7 @@ impl Lambda {
     pub fn new(scope: Arc<Scope>, formals: Vec<String>, body: Arc<Value>) -> Arc<Value> {
         Arc::new(Value::Function(Func {
             name: "#lambda".to_string(),
-            arity: formals.len(),
+            arity: None, // Lambda does arity checking separately.
             body: FuncBody::Lambda(Lambda {
                 scope,
                 formals,
@@ -94,12 +133,26 @@ impl Lambda {
     }
 
     pub fn call(&self, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
-        let bindings = HashMap::from_iter(
-            self.formals
-                .iter()
-                .zip(args)
-                .map(|(name, value)| (name.clone(), value.clone())),
-        );
+        const SPLAT_MARKER: &str = "...";
+        let mut args_iter = args.iter();
+        let pairs = self
+            .formals
+            .iter()
+            .map(|name| {
+                if name.starts_with(SPLAT_MARKER) {
+                    let name = name[SPLAT_MARKER.len()..].to_string();
+                    let mut values = Vec::new();
+                    while let Some(arg) = args_iter.next() {
+                        values.push(arg.clone());
+                    }
+                    Ok((name, Cell::from_vec(values)))
+                } else {
+                    let arg = args_iter.next().ok_or(Error::ArityError)?;
+                    Ok((name.clone(), arg.clone()))
+                }
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let bindings = HashMap::from_iter(pairs.into_iter());
         let scope = self.scope.new_child(bindings);
         eval(&scope, &self.body)
     }
@@ -127,29 +180,52 @@ impl std::cmp::Eq for FuncBody {}
 #[derive(Debug, PartialEq, Eq)]
 pub struct Func {
     pub name: String,
-    pub arity: usize,
+    pub arity: Option<usize>,
     pub body: FuncBody,
 }
 
 impl Func {
-    pub fn new(name: String, arity: usize, body: FuncBody) -> Arc<Value> {
-        Arc::new(Value::Function(Self { name, arity, body }))
+    pub fn new(name: String, body: FuncBody) -> Arc<Value> {
+        Arc::new(Value::Function(Self {
+            name,
+            arity: None,
+            body,
+        }))
+    }
+
+    pub fn new_with_arity(name: String, body: FuncBody, arity: usize) -> Arc<Value> {
+        Arc::new(Value::Function(Self {
+            name,
+            arity: Some(arity),
+            body,
+        }))
     }
 
     pub fn from_native(
         name: &'static str,
-        arity: usize,
         native: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
     ) -> Arc<Value> {
-        Self::new(name.to_string(), arity, FuncBody::Native(native))
+        Self::new(name.to_string(), FuncBody::Native(native))
+    }
+
+    pub fn from_native_with_arity(
+        name: &'static str,
+        native: fn(&[Arc<Value>]) -> Result<Arc<Value>, Error>,
+        arity: usize,
+    ) -> Arc<Value> {
+        Self::new_with_arity(name.to_string(), FuncBody::Native(native), arity)
     }
 
     pub fn call(&self, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
-        if args.len() != self.arity {
-            return Err(Error::ArityError);
-        }
         match &self.body {
-            FuncBody::Native(function) => function(args),
+            FuncBody::Native(function) => {
+                if let Some(arity) = self.arity {
+                    if args.len() != arity {
+                        return Err(Error::ArityError);
+                    }
+                }
+                function(args)
+            }
             FuncBody::Lambda(lambda) => lambda.call(args),
         }
     }
@@ -157,10 +233,15 @@ impl Func {
 
 pub type NativeSpecialForm = fn(&Arc<Scope>, &[Arc<Value>]) -> Result<Arc<Value>, Error>;
 
+pub enum SpecialFormBody {
+    Native(NativeSpecialForm),
+    Macro(Macro),
+}
+
 pub struct SpecialForm {
     pub name: String,
     pub arity: usize,
-    pub body: NativeSpecialForm,
+    pub body: SpecialFormBody,
 }
 
 impl std::fmt::Debug for SpecialForm {
@@ -179,7 +260,11 @@ impl std::cmp::Eq for SpecialForm {}
 
 impl SpecialForm {
     pub fn new(name: String, arity: usize, body: NativeSpecialForm) -> Arc<Value> {
-        Arc::new(Value::SpecialForm(SpecialForm { name, arity, body }))
+        Arc::new(Value::SpecialForm(SpecialForm {
+            name,
+            arity,
+            body: SpecialFormBody::Native(body),
+        }))
     }
 
     pub fn from_native(name: &'static str, arity: usize, native: NativeSpecialForm) -> Arc<Value> {
@@ -187,10 +272,14 @@ impl SpecialForm {
     }
 
     pub fn call(&self, scope: &Arc<Scope>, args: &[Arc<Value>]) -> Result<Arc<Value>, Error> {
+        // TODO: Handle arity like for lambda.
         if args.len() != self.arity {
             return Err(Error::ArityError);
         }
-        (self.body)(scope, args)
+        match &self.body {
+            SpecialFormBody::Native(function) => function(scope, args),
+            SpecialFormBody::Macro(macro_) => macro_.call(scope, args),
+        }
     }
 }
 
